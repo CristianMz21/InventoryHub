@@ -1,0 +1,287 @@
+@page "/products"
+@rendermode InteractiveServer
+
+@using InventoryHub.Contracts.Dtos
+@using InventoryHub.Frontend.Services
+@inject BackendClient Backend
+
+<PageTitle>Products — InventoryHub</PageTitle>
+
+<h1>Products</h1>
+<p>Full CRUD against the Minimal API. Paged envelope + search with debounce.</p>
+
+<div class="row mb-3">
+    <div class="col-md-4">
+        <input class="form-control" placeholder="Search by name..."
+               value="@search" @oninput="OnSearchInput" />
+    </div>
+    <div class="col-md-2">
+        <select class="form-select" value="@pageSize" @onchange="OnPageSizeChanged">
+            <option value="5">5 / page</option>
+            <option value="10">10 / page</option>
+            <option value="20">20 / page</option>
+            <option value="50">50 / page</option>
+        </select>
+    </div>
+</div>
+
+@if (!string.IsNullOrEmpty(error))
+{
+    <div class="alert alert-danger">@error <button class="btn btn-sm btn-outline-danger ms-2" @onclick="ClearError">Dismiss</button></div>
+}
+
+<div class="card mb-4">
+    <div class="card-header">Add product</div>
+    <div class="card-body">
+        <div class="row g-2">
+            <div class="col-md-4">
+                <input class="form-control" placeholder="Name" @bind="newName" />
+            </div>
+            <div class="col-md-3">
+                <select class="form-select" @bind="newCategoryId">
+                    <option value="0">-- Category --</option>
+                    @foreach (var c in categories)
+                    {
+                        <option value="@c.Id">@c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <input class="form-control" type="number" min="0" placeholder="Qty" @bind="newQuantity" />
+            </div>
+            <div class="col-md-3">
+                <button class="btn btn-primary" @onclick="CreateAsync" disabled="@busy">Add</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (loading)
+{
+    <p><em>Loading...</em></p>
+}
+else if (pageData is null || pageData.Items.Count == 0)
+{
+    <p><em>No products found.</em></p>
+}
+else
+{
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Id</th>
+                <th>Name</th>
+                <th>Category</th>
+                <th>Qty</th>
+                <th style="width:220px">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var p in pageData.Items)
+            {
+                if (editingId == p.Id)
+                {
+                    <tr>
+                        <td>@p.Id</td>
+                        <td><input class="form-control form-control-sm" @bind="editName" /></td>
+                        <td>
+                            <select class="form-select form-select-sm" @bind="editCategoryId">
+                                @foreach (var c in categories)
+                                {
+                                    <option value="@c.Id">@c.Name</option>
+                                }
+                            </select>
+                        </td>
+                        <td><input class="form-control form-control-sm" type="number" min="0" @bind="editQuantity" /></td>
+                        <td>
+                            <button class="btn btn-sm btn-success me-1" @onclick="() => SaveEditAsync(p.Id)" disabled="@busy">Save</button>
+                            <button class="btn btn-sm btn-secondary" @onclick="CancelEdit" disabled="@busy">Cancel</button>
+                        </td>
+                    </tr>
+                }
+                else
+                {
+                    <tr>
+                        <td>@p.Id</td>
+                        <td>@p.Name</td>
+                        <td>@p.CategoryName</td>
+                        <td>@p.Quantity</td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary me-1" @onclick="() => StartEdit(p)" disabled="@busy">Edit</button>
+                            @if (confirmDeleteId == p.Id)
+                            {
+                                <button class="btn btn-sm btn-danger me-1" @onclick="() => DeleteAsync(p.Id)" disabled="@busy">Confirm?</button>
+                                <button class="btn btn-sm btn-secondary" @onclick="() => confirmDeleteId = null">No</button>
+                            }
+                            else
+                            {
+                                <button class="btn btn-sm btn-outline-danger" @onclick="() => confirmDeleteId = p.Id" disabled="@busy">Delete</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            }
+        </tbody>
+    </table>
+
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn btn-outline-secondary btn-sm" @onclick="PrevPage" disabled="@(page <= 1 || busy)">← Prev</button>
+        <span>Page @pageData.Page of @Math.Max(pageData.TotalPages, 1) (@pageData.TotalCount items)</span>
+        <button class="btn btn-outline-secondary btn-sm" @onclick="NextPage" disabled="@(page >= pageData.TotalPages || busy)">Next →</button>
+    </div>
+}
+
+@code {
+    private PagedResult<ProductResponse>? pageData;
+    private List<CategoryResponse> categories = [];
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+
+    private int page = 1;
+    private int pageSize = 10;
+    private string search = "";
+    private CancellationTokenSource? searchCts;
+
+    private string newName = "";
+    private int newCategoryId;
+    private int newQuantity;
+
+    private int? editingId;
+    private string editName = "";
+    private int editCategoryId;
+    private int editQuantity;
+    private int? confirmDeleteId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            categories = await Backend.GetCategoriesAsync();
+            if (categories.Count > 0) newCategoryId = categories[0].Id;
+            await LoadPageAsync(CancellationToken.None);
+        }
+        catch (Exception ex)
+        {
+            error = $"Could not reach the backend: {ex.Message} (see docs/INTEGRATION-TROUBLESHOOTING.md)";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task LoadPageAsync(CancellationToken ct)
+    {
+        loading = true;
+        try
+        {
+            pageData = await Backend.GetProductsPagedAsync(page, pageSize, string.IsNullOrWhiteSpace(search) ? null : search, ct);
+            error = null;
+        }
+        catch (OperationCanceledException) { /* búsqueda superada por una más nueva */ }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task OnSearchInput(ChangeEventArgs e)
+    {
+        search = e.Value?.ToString() ?? "";
+        page = 1;
+        searchCts?.Cancel();
+        searchCts = new CancellationTokenSource();
+        var token = searchCts.Token;
+        try
+        {
+            // Debounce 400ms: evita un request por tecla (Actividad 4).
+            await Task.Delay(400, token);
+            await LoadPageAsync(token);
+            StateHasChanged();
+        }
+        catch (OperationCanceledException) { }
+    }
+
+    private async Task OnPageSizeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var size))
+        {
+            pageSize = Math.Clamp(size, 1, 100);
+            page = 1;
+            await LoadPageAsync(CancellationToken.None);
+        }
+    }
+
+    private async Task PrevPage()
+    {
+        if (page > 1) { page--; await LoadPageAsync(CancellationToken.None); }
+    }
+
+    private async Task NextPage()
+    {
+        if (pageData is not null && page < pageData.TotalPages) { page++; await LoadPageAsync(CancellationToken.None); }
+    }
+
+    private async Task CreateAsync()
+    {
+        error = null;
+        if (string.IsNullOrWhiteSpace(newName)) { error = "Name is required."; return; }
+        if (newCategoryId <= 0) { error = "Pick a category."; return; }
+        busy = true;
+        try
+        {
+            await Backend.CreateProductAsync(new ProductRequest(newName.Trim(), newCategoryId, newQuantity));
+            newName = "";
+            newQuantity = 0;
+            await LoadPageAsync(CancellationToken.None);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private void StartEdit(ProductResponse p)
+    {
+        editingId = p.Id;
+        editName = p.Name;
+        editCategoryId = p.CategoryId;
+        editQuantity = p.Quantity;
+        confirmDeleteId = null;
+    }
+
+    private void CancelEdit() => editingId = null;
+
+    private async Task SaveEditAsync(int id)
+    {
+        busy = true;
+        try
+        {
+            await Backend.UpdateProductAsync(id, new ProductRequest(editName.Trim(), editCategoryId, editQuantity));
+            editingId = null;
+            await LoadPageAsync(CancellationToken.None);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        busy = true;
+        try
+        {
+            await Backend.DeleteProductAsync(id);
+            confirmDeleteId = null;
+            // Si borramos el último de la página, retrocede una página.
+            if (pageData is not null && pageData.Items.Count == 1 && page > 1) page--;
+            await LoadPageAsync(CancellationToken.None);
+        }
+        catch (Exception ex) { error = ex.Message; }
+        finally { busy = false; }
+    }
+
+    private void ClearError() => error = null;
+}

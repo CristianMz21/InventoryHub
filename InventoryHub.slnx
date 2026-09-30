@@ -1,0 +1,8 @@
+<Solution>
+  <Project Path="Contracts/Contracts.csproj" />
+  <Project Path="Backend/Domain/Domain.csproj" />
+  <Project Path="Backend/Application/Application.csproj" />
+  <Project Path="Backend/Infrastructure/Infrastructure.csproj" />
+  <Project Path="Backend/Api/Api.csproj" />
+  <Project Path="Frontend/Frontend.csproj" />
+</Solution>

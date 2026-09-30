@@ -47,6 +47,19 @@ Open `http://localhost:5210/products`. API docs (Development):
 > If you change the model, delete it and restart (school-project shortcut documented
 > in `docs/INTEGRATION-TROUBLESHOOTING.md` §2).
 
+## Tests (22 passing)
+
+```bash
+dotnet test InventoryHub.slnx
+```
+
+- `Tests/Application.Tests` (12): service rules — paging clamp, search trim/truncate,
+  total pages, category-exists guard, name trimming, CRUD flows. Hand-made fakes,
+  no mocking framework.
+- `Tests/Api.Tests` (10): `WebApplicationFactory` + fresh SQLite file per test —
+  health, paged camelCase envelope, search, 404 envelope, POST 201, domain 400,
+  validation 400, PUT/DELETE flows, categories seed.
+
 ## API quick tour
 
 ```bash

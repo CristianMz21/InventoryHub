@@ -61,3 +61,8 @@ app.MapCategoryEndpoints();
 app.MapProductEndpoints();
 
 app.Run();
+
+// Visible to Tests/Api.Tests (WebApplicationFactory<Program>).
+public partial class Program
+{
+}

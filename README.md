@@ -6,9 +6,9 @@ documented in `docs/COPILOT-REFLECTION.md`.
 
 | Rubric (30 pts) | Where to review |
 |---|---|
-| GitHub repo (5) | this repository (public) |
+| GitHub repo (5) | https://github.com/CristianMz21/InventoryHub (public) |
 | Integration code front↔back (5) | `Frontend/Services/BackendClient.cs`, `Backend/Api/Endpoints/` |
-| Debugging with Copilot (5) | `docs/INTEGRATION-TROUBLESHOOTING.md` (6 real errors) |
+| Debugging with Copilot (5) | `docs/INTEGRATION-TROUBLESHOOTING.md` (9 real errors) |
 | JSON structures (5) | `Contracts/Dtos/ApiEnvelope.cs`, `docs/JSON-EXAMPLES.md` |
 | Performance optimization (5) | `docs/PERFORMANCE.md`, `ProductRepository.cs`, `Products.razor` |
 | Reflective summary (5) | `docs/COPILOT-REFLECTION.md` |
@@ -19,13 +19,18 @@ documented in `docs/COPILOT-REFLECTION.md`.
 InventoryHub.slnx
 ├── Contracts/            # shared: ApiRoutes, Limits, ApiResponse<T>, PagedResult<T>, DTOs
 ├── Backend/
-│   ├── Domain/           # Product, Category entities
-│   ├── Application/      # IProductService/ICategoryService, services, repos interfaces
+│   ├── Domain/           # Product, Category entities (no dependencies)
+│   ├── Application/      # repository/service abstractions, services, domain exceptions
 │   ├── Infrastructure/   # AppDbContext (indexes + seed), EF repositories
 │   └── Api/              # Minimal API endpoints, ProblemDetails handler, OutputCache
 ├── Frontend/             # Blazor Server: BackendClient (retry), Products + Categories pages
-└── docs/                 # troubleshooting, JSON examples, performance, Copilot reflection
+├── Tests/
+│   ├── Application.Tests # 12 unit tests, hand-made fakes
+│   └── Api.Tests         # 10 integration tests, WebApplicationFactory + SQLite per test
+└── docs/                 # architecture, troubleshooting, JSON, performance, Copilot reflection
 ```
+
+Rules and trade-offs: `docs/ARCHITECTURE.md`.
 
 ## Run it (2 terminals)
 
@@ -69,13 +74,7 @@ curl -s -X POST http://localhost:5200/products \
   -d '{"name":"Webcam","categoryId":1,"quantity":7}'
 ```
 
-## Publish to GitHub (public repo for review)
+## Repository
 
-```bash
-cd InventoryHub
-git init && git add -A && git commit -m "feat: complete InventoryHub full-stack app"
-gh repo create InventoryHub --public --source=. --push
-# …or push manually:
-# git remote add origin https://github.com/<tu-usuario>/InventoryHub.git
-# git branch -M main && git push -u origin main
-```
+Live at https://github.com/CristianMz21/InventoryHub (public, branch `main`).
+Clone and run — no extra setup beyond the .NET 10 SDK.

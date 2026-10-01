@@ -51,8 +51,11 @@ Success reads and 404s use the envelope; validation/domain failures use RFC 7807
 ### GET `/products/999` → 404 (real output)
 
 ```json
-{ "success": false, "data": null, "error": "Product 999 not found.", "traceId": "0HNOV781NJTF5:00000001" }
+{ "success": false, "error": "Product 999 not found.", "traceId": "0HNOV781NJTF5:00000001" }
 ```
+
+> Note: `data` is absent, not `null` — `WhenWritingNull` drops it
+> (`ConfigureHttpJsonOptions`, `Program.cs`). Same for `error` on success.
 
 ## 2. Failures — RFC 7807 `ProblemDetails`
 
@@ -77,7 +80,19 @@ Success reads and 404s use the envelope; validation/domain failures use RFC 7807
 { "title": "Bad Request", "status": 400, "detail": "Category 99 does not exist." }
 ```
 
-## 3. Contract source of truth
+## 3. Status-code map (all covered by `Tests/Api.Tests`)
+
+| Operation | Code | Body |
+|---|---|---|
+| GET list / single (found) | 200 | `ApiResponse<T>` envelope |
+| POST | 201 | `ApiResponse<T>` envelope + `Location` header |
+| PUT / DELETE | 204 | empty |
+| GET missing | 404 | `ApiResponse` fail envelope (`success: false`) |
+| Invalid DTO | 400 | RFC 7807 validation problem (`errors`) |
+| Domain violation (e.g. unknown category) | 400 | RFC 7807 (`detail`) |
+| GET `/health` | 200 | plain text `Healthy` |
+
+## 4. Contract source of truth
 
 `Contracts/Dtos/ApiEnvelope.cs` (`ApiResponse<T>`, `PagedResult<T>`),
 `ProductDtos.cs`, `CategoryDtos.cs`, plus `ApiRoutes.cs` and `Limits.cs`

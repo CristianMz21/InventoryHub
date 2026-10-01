@@ -1,7 +1,8 @@
 # Performance (Actividad 4)
 
-Verified with `dotnet build` (0 warnings) + live curl runs. No benchmark lab here,
-so every item below is a concrete, reviewable code decision, not a slogan.
+Verified with `dotnet build` (0 warnings) + `dotnet test` (22/22) + live curl runs.
+No benchmark lab here, so every item below is a concrete, reviewable code decision,
+not a slogan.
 
 ## Back-end (EF Core + SQLite + Minimal API)
 
@@ -40,3 +41,6 @@ so every item below is a concrete, reviewable code decision, not a slogan.
   code readable at this catalog size; the indexes + paging dominate real latency.
 - No distributed cache/Redis: `OutputCache` in-memory is the right size for a review demo.
 - No response compression tuning: default Kestrel behavior is fine for JSON this small.
+- No shared test fixture for integration tests: one server + SQLite file per test costs
+  ~200 ms each (~2 s total) but `OutputCache` + seed data would make shared tests
+  order-dependent. Correctness of the suite beats 1.5 s of speed.

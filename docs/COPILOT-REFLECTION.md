@@ -56,9 +56,29 @@
   `OnSearchInput` y yo verifiqué que el token cancelado no mostrara error
   (`catch (OperationCanceledException)` silencioso).
 
+## Fase de tests — lo que la IA no vio venir
+
+- **Prompt:** *"book de tests para ProductService sin framework de mocks"* → Copilot
+  propuso Moq; lo rechacé (2 interfaces no justifican una dependencia) y salieron los
+  fakes explícitos de `Tests/Application.Tests/Fakes.cs`.
+- **El test que me enseñó algo:** `CreateAsync_Trims_Name_And_Maps_CategoryName` falló
+  con `CategoryName == ""` — no era un bug del servicio sino de mi fake, que no
+  simulaba el `Include(p => p.Category)` del repositorio EF real. Lección que quedó
+  en código: `AttachCategories()` con comentario, porque un fake que miente es peor
+  que no tener test.
+- **Aislamiento en integración:** Copilot sugirió fixture compartido (más rápido);
+  lo descarté tras razonar que `OutputCache` + seed harían los tests dependientes
+  del orden. Fábrica fresca + SQLite temporal por test: 22/22 en ~2 s.
+- **Prompt:** *"`WebApplicationFactory<Program>` no compila con top-level statements"*
+  → `public partial class Program { }`. Cuatro líneas, único hook de tests en
+  producción.
+
 ## Verificación (evidencia, no promesas)
 
 - `dotnet build InventoryHub.slnx` → **succeeded, 0 warnings, 0 errors**.
+- `dotnet test InventoryHub.slnx` → **22/22 passing**
+  (12 unitarios en ~130 ms, 10 de integración en ~2 s).
+- `dotnet format --verify-no-changes` → exit 0 (lo exige el hook pre-commit).
 - curl en vivo: `health`, lista paginada, `search=note`, 404 con envelope, `PUT`/`DELETE`
   204, 400 de validación, 400 de categoría inexistente, `POST` 201 — y frontend Blazor
   sirviendo `/` y `/products` con llamadas backend→200 visibles en su log.

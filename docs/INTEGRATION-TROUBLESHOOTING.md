@@ -64,10 +64,38 @@ from `Frontend/Frontend.csproj` use `..\Contracts\Contracts.csproj`.
 **Fix:** reuse one terminal per server, kill by exact PID (`kill $(cat srv.pid)`).
 Never `pkill -f <pattern>` with a pattern that also appears in your own shell command.
 
+## 7. Commit rejected by pre-commit hook — `dotnet format` whitespace
+
+**Symptom:** `git commit` aborts with `error WHITESPACE ... Run 'dotnet format' to fix`.
+**Cause:** this repo enforces formatting via hook (e.g. expanded accessor braces in
+entities — `get;`/`set;` on their own lines — which no human writes by hand).
+**Fix:** `dotnet format InventoryHub.slnx` before committing, then
+`dotnet format ... --verify-no-changes` to confirm exit 0. Never `--no-verify`
+your way past it; the CI/reviewer sees the same diff.
+
+## 8. Integration tests influence each other — shared server/DB/cache
+
+**Symptom:** tests pass alone, fail in suite (or counts drift): `GET /products`
+returns a cached list from a previous test because of `OutputCache` (30 s), and
+seed assertions break once another test inserts rows.
+**Fix:** `Tests/Api.Tests/InventoryHubFactory.cs` spins a fresh
+`WebApplicationFactory` + unique temp SQLite file **per test** and deletes it on
+dispose. Costs ~200 ms/test; buys total isolation. Rule: never assert absolute
+list counts against a shared server.
+
+## 9. `WebApplicationFactory<Program>` doesn't compile — Program is internal
+
+**Symptom:** `CS0122`/`CS0246`: test project can't see the minimal-hosting `Program`.
+**Cause:** top-level statements generate an `internal Program` class.
+**Fix:** append `public partial class Program { }` to `Backend/Api/Program.cs`
+(the only test hook in production code). No `InternalsVisibleTo` needed.
+
 ## Quick smoke test (after any change)
 
 ```bash
+dotnet format InventoryHub.slnx --verify-no-changes
 dotnet build InventoryHub.slnx
+dotnet test InventoryHub.slnx
 rm -f Backend/Api/inventoryhub.db
 dotnet run --project Backend/Api --urls http://localhost:5200 &
 sleep 8
